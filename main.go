@@ -24,6 +24,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"runtime"
 	"sync"
 	"time"
@@ -60,11 +61,27 @@ func sieveOfEratosthenes(limit int) []int {
 	}
 
 	// Collectionner les nombres premiers.
-	var primes []int
+	// Pre-allocate primes slice with an estimated capacity to reduce reallocations.
+	// Prime Number Theorem: pi(x) ~ x / ln(x)
+	var estimatedPrimes int
+	if limit < 2 { // Avoid Log of numbers < 1, and handle small limits
+		estimatedPrimes = 0
+	} else if limit < 20 { // For very small limits, ln(limit) can be too small or estimation poor.
+		estimatedPrimes = limit // Overestimate slightly or use fixed small capacity
+	} else {
+		estimatedPrimes = int(float64(limit) / math.Log(float64(limit)))
+	}
+	// Ensure a minimum capacity, e.g. for limit=2, estimate is ~1, actual is 1. For limit=10, estimate ~4, actual 4.
+	// Give some extra capacity factor, e.g., 1.2, because estimate is an approximation.
+	primes := make([]int, 0, int(float64(estimatedPrimes)*1.2)+10) // +10 as a small buffer
+
 	for p := 2; p <= limit; p++ {
 		if !primesMarker[p] {
 			primes = append(primes, p)
 		}
+	}
+	if len(primes) == 0 {
+		return nil
 	}
 	return primes
 }
