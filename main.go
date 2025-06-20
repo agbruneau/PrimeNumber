@@ -1,31 +1,85 @@
+/*
+ * Fichier: main.go
+ * Auteur: [Votre Nom/Organisation]
+ * Date: 20 juin 2025
+ *
+ * Description:
+ * Ce programme est une vérification empirique et une implémentation optimisée
+ * pour trouver des nombres premiers 'n' qui satisfont au théorème prouvé par
+ * les mathématiciens Ben Green et Mehtaab Sawhney.
+ *
+ * Le théorème stipule qu'il existe une infinité de nombres premiers de la forme:
+ * n = p^2 + 4*q^2
+ * où 'p' et 'q' sont eux-mêmes des nombres premiers.
+ *
+ * Architecture de la solution:
+ * - Utilisation d'un crible d'Eratosthène pour la génération efficace des nombres premiers initiaux.
+ * - Implémentation d'un pool de workers (Worker Pool) avec des goroutines pour paralléliser
+ * la recherche et tirer parti des processeurs multi-cœurs.
+ * - Utilisation de canaux (channels) pour la distribution des tâches et la collecte des résultats
+ * de manière concurrente et sécurisée.
+ */
 package main
 
 import (
 	"fmt"
-	"math"
+	"runtime"
+	"sync"
 	"time"
 )
 
-// isPrime vérifie si un nombre est premier.
-// Utilise une approche optimisée de division par essais.
-// Un nombre est premier s'il n'est divisible que par 1 et par lui-même.
-// On vérifie la divisibilité de 2 jusqu'à la racine carrée du nombre.
+// Job représente une tâche à effectuer par un worker: une paire (p, q) à tester.
+type Job struct {
+	p int
+	q int
+}
+
+// Result représente un résultat positif trouvé par un worker.
+type Result struct {
+	p int
+	q int
+	n int
+}
+
+// sieveOfEratosthenes génère tous les nombres premiers jusqu'à une limite donnée.
+// C'est une méthode beaucoup plus efficace que des tests de primalité individuels.
+func sieveOfEratosthenes(limit int) []int {
+	// Initialise un tableau de booléens pour marquer les nombres.
+	// `primes[i]` sera `true` si `i` n'est pas premier.
+	primesMarker := make([]bool, limit+1)
+	primesMarker[0], primesMarker[1] = true, true // 0 et 1 ne sont pas premiers.
+
+	// Algorithme du crible.
+	for p := 2; p*p <= limit; p++ {
+		if !primesMarker[p] { // Si p est premier...
+			for i := p * p; i <= limit; i += p {
+				primesMarker[i] = true // ...marquer tous ses multiples comme non premiers.
+			}
+		}
+	}
+
+	// Collectionner les nombres premiers.
+	var primes []int
+	for p := 2; p <= limit; p++ {
+		if !primesMarker[p] {
+			primes = append(primes, p)
+		}
+	}
+	return primes
+}
+
+// isPrime vérifie si un grand nombre est premier.
+// Nécessaire pour les résultats 'n' qui peuvent dépasser la limite du crible.
 func isPrime(n int) bool {
-	// 0 et 1 ne sont pas des nombres premiers.
 	if n <= 1 {
 		return false
 	}
-	// 2 et 3 sont des nombres premiers.
 	if n <= 3 {
 		return true
 	}
-	// Si le nombre est divisible par 2 ou 3, il n'est pas premier.
-	// C'est une optimisation pour éliminer rapidement de nombreux composites.
 	if n%2 == 0 || n%3 == 0 {
 		return false
 	}
-	// Tous les nombres premiers (sauf 2 et 3) sont de la forme 6k ± 1.
-	// Nous pouvons donc vérifier les diviseurs en sautant de 6 en 6.
 	for i := 5; i*i <= n; i = i + 6 {
 		if n%i == 0 || n%(i+2) == 0 {
 			return false
@@ -34,55 +88,81 @@ func isPrime(n int) bool {
 	return true
 }
 
-// findSpecialPrimes recherche les nombres premiers de la forme p^2 + 4q^2.
-// 'limit' définit la borne supérieure pour les nombres premiers p et q.
-func findSpecialPrimes(limit int) {
-	fmt.Printf("Recherche des nombres premiers de la forme n = p^2 + 4q^2 jusqu'à p, q <= %d\n", limit)
-	fmt.Println("-------------------------------------------------------------------")
-	
-	// Étape 1: Générer une liste de nombres premiers jusqu'à la limite.
-	// Cela évite de recalculer la primalité de p et q à chaque itération.
-	primes := []int{}
-	for i := 2; i <= limit; i++ {
-		if isPrime(i) {
-			primes = append(primes, i)
+// worker est une fonction qui s'exécute dans une goroutine.
+// Elle reçoit des tâches (Jobs) depuis un canal, les traite,
+// et envoie les résultats positifs dans un autre canal.
+// Le paramètre 'id' est ignoré avec '_' pour résoudre l'alerte du linter.
+func worker(_ int, wg *sync.WaitGroup, jobs <-chan Job, results chan<- Result) {
+	defer wg.Done() // Signale que ce worker a terminé lorsque la fonction retourne.
+
+	for job := range jobs { // Itère sur le canal de tâches jusqu'à sa fermeture.
+		p, q := job.p, job.q
+		n := (p * p) + 4*(q*q)
+
+		if isPrime(n) {
+			results <- Result{p: p, q: q, n: n}
 		}
 	}
-	
-	fmt.Printf("Trouvé %d nombres premiers jusqu'à %d. Début de la recherche...\n\n", len(primes), limit)
-	fmt.Printf("%-10s | %-10s | %-20s | %-s\n", "p", "q", "n = p^2 + 4q^2", "Vérification")
-
-	count := 0
-	// Étape 2: Itérer sur toutes les paires possibles de nombres premiers (p, q).
-	for _, p := range primes {
-		for _, q := range primes {
-			// Calculer la valeur de n selon la formule.
-			n := (p * p) + 4*(q * q)
-
-			// Étape 3: Vérifier si le résultat n est également un nombre premier.
-			if isPrime(n) {
-				count++
-				fmt.Printf("%-10d | %-10d | %-20d | %s\n", p, q, n, "Trouvé!")
-			}
-		}
-	}
-
-	fmt.Println("-------------------------------------------------------------------")
-	fmt.Printf("Recherche terminée. %d nombres premiers spéciaux trouvés.\n", count)
 }
 
 func main() {
-	// Démarrer un chronomètre pour mesurer la durée d'exécution.
 	startTime := time.Now()
 
-	// Définir la limite pour la recherche des nombres premiers p et q.
-	// Attention: une limite élevée augmentera considérablement le temps de calcul (complexité O(N^2)).
-	// Une limite de 500 est raisonnable pour une exécution rapide.
-	searchLimit := 500
+	// --- Configuration ---
+	// Augmentation de la limite pour démontrer la puissance de l'optimisation.
+	searchLimit := 1000
+	// Utilisation de tous les cœurs de processeur disponibles pour les workers.
+	numWorkers := runtime.NumCPU()
 
-	findSpecialPrimes(searchLimit)
-	
-	// Calculer et afficher la durée totale de l'exécution.
+	fmt.Printf("Initialisation avec searchLimit=%d et numWorkers=%d\n", searchLimit, numWorkers)
+	fmt.Println("-------------------------------------------------------------------")
+
+	// --- Étape 1: Génération optimisée des nombres premiers ---
+	fmt.Println("Génération des nombres premiers avec le crible d'Eratosthène...")
+	primes := sieveOfEratosthenes(searchLimit)
+	fmt.Printf("%d nombres premiers trouvés jusqu'à %d.\n\n", len(primes), searchLimit)
+
+	// --- Étape 2: Mise en place du Pool de Workers et des canaux ---
+	jobs := make(chan Job, len(primes))
+	results := make(chan Result, 100) // Canal avec buffer pour les résultats.
+	var wg sync.WaitGroup
+
+	// Démarrage des workers.
+	for w := 1; w <= numWorkers; w++ {
+		wg.Add(1)
+		go worker(w, &wg, jobs, results)
+	}
+
+	// --- Étape 3: Distribution des tâches ---
+	// Une goroutine distincte est utilisée pour envoyer les tâches afin de ne pas bloquer
+	// la collecte des résultats, qui se fait en parallèle.
+	go func() {
+		for _, p := range primes {
+			for _, q := range primes {
+				jobs <- Job{p: p, q: q}
+			}
+		}
+		close(jobs) // Ferme le canal, signale aux workers qu'il n'y a plus de tâches.
+	}()
+
+	// --- Étape 4: Collecte des résultats ---
+	// Une goroutine pour fermer le canal de résultats une fois que tous les workers ont terminé.
+	go func() {
+		wg.Wait() // Attend la fin de tous les workers.
+		close(results)
+	}()
+
+	// Affichage des résultats au fur et à mesure de leur arrivée.
+	fmt.Printf("%-10s | %-10s | %-20s | %-s\n", "p", "q", "n = p^2 + 4q^2", "Vérification")
+	count := 0
+	for res := range results {
+		count++
+		fmt.Printf("%-10d | %-10d | %-20d | %s\n", res.p, res.q, res.n, "Trouvé!")
+	}
+
+	// --- Finalisation ---
 	duration := time.Since(startTime)
+	fmt.Println("-------------------------------------------------------------------")
+	fmt.Printf("Recherche terminée. %d nombres premiers spéciaux trouvés.\n", count)
 	fmt.Printf("\nDurée totale de l'exécution: %s\n", duration)
 }
