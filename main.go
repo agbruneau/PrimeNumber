@@ -89,10 +89,13 @@ func sieveOfEratosthenes(limit int) []int {
 	return primes
 }
 
-// isPrimeTrialDivision vérifie si un grand nombre est premier par division successive.
+// isNPrimeAccordingToGreenSawhneyContext vérifie si un grand nombre est premier par division successive.
+// Ce nom reflète son utilisation dans le contexte de la vérification des nombres 'n' issus
+// de la formule p^2 + 4q^2 du théorème de Green-Sawhney.
+// L'algorithme sous-jacent reste la division par essais.
 // Nécessaire pour les résultats 'n' qui peuvent dépasser la limite du crible.
 // Utilise int64 pour la robustesse.
-func isPrimeTrialDivision(n int64) bool {
+func isNPrimeAccordingToGreenSawhneyContext(n int64) bool {
 	if n <= 1 {
 		return false
 	}
@@ -192,7 +195,7 @@ func worker(wg *sync.WaitGroup, jobs <-chan Job, results chan<- Result, primeTes
 		if primeTestAlgorithm == "miller" {
 			isNPrime = isPrimeMillerRabin64(n)
 		} else { // Par défaut: "trial"
-			isNPrime = isPrimeTrialDivision(n)
+			isNPrime = isNPrimeAccordingToGreenSawhneyContext(n)
 		}
 
 		if isNPrime {
