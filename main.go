@@ -22,6 +22,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"runtime"
 	"sync"
@@ -109,8 +110,15 @@ func main() {
 	startTime := time.Now()
 
 	// --- Configuration ---
-	// Augmentation de la limite pour démontrer la puissance de l'optimisation.
-	searchLimit := 1000
+	// Définition du flag pour searchLimit
+	// Le premier argument est le nom du flag.
+	// Le deuxième est la valeur par défaut.
+	// Le troisième est la description du flag (utilisée par -help).
+	searchLimitPtr := flag.Int("limit", 1000, "Limite supérieure pour la recherche des nombres premiers p et q.")
+	flag.Parse() // Analyse les arguments de la ligne de commande.
+
+	searchLimit := *searchLimitPtr // Déréférence le pointeur pour obtenir la valeur.
+
 	// Utilisation de tous les cœurs de processeur disponibles pour les workers.
 	numWorkers := runtime.NumCPU()
 
