@@ -40,8 +40,8 @@ func TestSieveOfEratosthenes(t *testing.T) {
 	}
 }
 
-// TestIsNPrimeAccordingToGreenSawhneyContext valide le test de primalité par division utilisé dans le contexte de Green-Sawhney.
-func TestIsNPrimeAccordingToGreenSawhneyContext(t *testing.T) {
+// TestIsPrimeTrialDivision valide le test de primalité par division.
+func TestIsPrimeTrialDivision(t *testing.T) {
 	testCases := []struct {
 		name     string
 		n        int64
@@ -59,8 +59,8 @@ func TestIsNPrimeAccordingToGreenSawhneyContext(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if result := isNPrimeAccordingToGreenSawhneyContext(tc.n); result != tc.expected {
-				t.Errorf("isNPrimeAccordingToGreenSawhneyContext(%d) = %v, attendu %v", tc.n, result, tc.expected)
+			if result := isPrimeTrialDivision(tc.n); result != tc.expected {
+				t.Errorf("isPrimeTrialDivision(%d) = %v, attendu %v", tc.n, result, tc.expected)
 			}
 		})
 	}

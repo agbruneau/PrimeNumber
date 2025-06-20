@@ -1,7 +1,7 @@
 /*
  * Fichier: main.go
- * Auteur: [Votre Nom/Organisation]
- * Date: 20 juin 2025
+ * Auteur: Jules @ AI Agent
+ * Date: 24 juillet 2024
  *
  * Description:
  * Ce programme est une vérification empirique et une implémentation optimisée
@@ -32,7 +32,13 @@ import (
 	"time"
 )
 
-// Job représente une tâche à effectuer par un worker: une paire (p, q) à tester.
+// Constants for primality test algorithms
+const (
+	millerAlgorithm        = "miller"
+	trialDivisionAlgorithm = "trial"
+)
+
+// Job represents a task to be performed by a worker: a pair (p, q) to test.
 type Job struct {
 	p int
 	q int
@@ -89,13 +95,13 @@ func sieveOfEratosthenes(limit int) []int {
 	return primes
 }
 
-// isNPrimeAccordingToGreenSawhneyContext vérifie si un grand nombre est premier par division successive.
-// Ce nom reflète son utilisation dans le contexte de la vérification des nombres 'n' issus
-// de la formule p^2 + 4q^2 du théorème de Green-Sawhney.
-// L'algorithme sous-jacent reste la division par essais.
-// Nécessaire pour les résultats 'n' qui peuvent dépasser la limite du crible.
-// Utilise int64 pour la robustesse.
-func isNPrimeAccordingToGreenSawhneyContext(n int64) bool {
+// isPrimeTrialDivision checks if a large number is prime by trial division.
+// This name reflects its use in the context of checking numbers 'n' resulting
+// from the p^2 + 4q^2 formula of the Green-Sawhney theorem.
+// The underlying algorithm remains trial division.
+// Necessary for 'n' results that may exceed the sieve limit.
+// Uses int64 for robustness.
+func isPrimeTrialDivision(n int64) bool {
 	if n <= 1 {
 		return false
 	}
@@ -192,10 +198,13 @@ func worker(wg *sync.WaitGroup, jobs <-chan Job, results chan<- Result, primeTes
 		n := (p * p) + 4*(q*q)
 
 		var isNPrime bool
-		if primeTestAlgorithm == "miller" {
+		switch primeTestAlgorithm {
+		case millerAlgorithm:
 			isNPrime = isPrimeMillerRabin64(n)
-		} else { // Par défaut: "trial"
-			isNPrime = isNPrimeAccordingToGreenSawhneyContext(n)
+		case trialDivisionAlgorithm:
+			isNPrime = isPrimeTrialDivision(n)
+		default: // Should not happen with current flag setup, but good practice
+			isNPrime = isPrimeMillerRabin64(n) // Default to Miller-Rabin
 		}
 
 		if isNPrime {
@@ -205,26 +214,34 @@ func worker(wg *sync.WaitGroup, jobs <-chan Job, results chan<- Result, primeTes
 }
 
 func main() {
-	startTime := time.Now()
-
 	// --- Configuration ---
-	searchLimitPtr := flag.Int("limit", 1000, "Limite supérieure pour la recherche des nombres premiers p et q.")
-	primeTestPtr := flag.String("primetest", "miller", "Algorithme de test de primalité: 'trial' ou 'miller' (défaut).")
+	// Define command-line flags
+	searchLimitPtr := flag.Int("limit", 1000, "Upper limit for searching prime numbers p and q.")
+	primeTestPtr := flag.String("primetest", millerAlgorithm, fmt.Sprintf("Primality testing algorithm: '%s' or '%s' (default).", trialDivisionAlgorithm, millerAlgorithm))
 	flag.Parse()
 
+	// Assign flag values to variables
 	searchLimit := *searchLimitPtr
 	primeTestAlgorithm := *primeTestPtr
 
+	// Validate primeTestAlgorithm input
+	if primeTestAlgorithm != millerAlgorithm && primeTestAlgorithm != trialDivisionAlgorithm {
+		fmt.Printf("Invalid primetest algorithm: %s. Defaulting to %s.\n", primeTestAlgorithm, millerAlgorithm)
+		primeTestAlgorithm = millerAlgorithm
+	}
+
 	numWorkers := runtime.NumCPU()
+	startTime := time.Now()
+
 
 	fmt.Printf("Initialisation avec searchLimit=%d, numWorkers=%d, primeTest='%s'\n", searchLimit, numWorkers, primeTestAlgorithm)
 	fmt.Println("-------------------------------------------------------------------")
 
-	// --- Étape 1: Génération optimisée des nombres premiers ---
-	fmt.Println("Génération des nombres premiers avec le crible d'Eratosthène...")
+	// --- Step 1: Optimized generation of prime numbers ---
+	fmt.Println("Generating prime numbers with Sieve of Eratosthenes...")
 	primes := sieveOfEratosthenes(searchLimit)
 	if primes == nil {
-		fmt.Println("Aucun nombre premier trouvé dans la limite spécifiée.")
+		fmt.Println("No prime numbers found within the specified limit.")
 		return
 	}
 	fmt.Printf("%d nombres premiers trouvés jusqu'à %d.\n\n", len(primes), searchLimit)
